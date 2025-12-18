@@ -17,45 +17,73 @@ log_step() { echo -e "${BLUE}==>${NC} $1"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-# Namespaces
-INFRA_NAMESPACE="geo-infra"
+# Namespace
 ORY_NAMESPACE="geo-ory"
-APP_NAMESPACE="geo-app"
 
-RELEASE_NAME="${RELEASE_NAME:-geo-metrics}"
+# Create infra namespace if it doesn't exist
+create_namespace() {
+    log_step "Ensuring infra namespace exists"
 
-# Check prerequisites
-check_prerequisites() {
-    log_step "Checking prerequisites"
-    
-    # Check if PostgreSQL StatefulSet is running
-    if ! kubectl get statefulset ${RELEASE_NAME}-postgresql -n "$INFRA_NAMESPACE" &>/dev/null; then
-        log_error "PostgreSQL not found in namespace '$INFRA_NAMESPACE'"
-        log_error "Please run 'make setup-core' first"
-        exit 1
+    if kubectl get namespace "$ORY_NAMESPACE" &>/dev/null; then
+        log_info "Namespace '$ORY_NAMESPACE' already exists"
+    else
+        kubectl create namespace "$ORY_NAMESPACE"
+        log_info "Created namespace '$ORY_NAMESPACE'"
     fi
-    
-    # Check if PostgreSQL pod is running
-    local pg_pod_status=$(kubectl get pods -n "$INFRA_NAMESPACE" -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].status.phase}' 2>/dev/null || echo "")
-    if [[ "$pg_pod_status" != "Running" ]]; then
-        log_error "PostgreSQL pod is not running (status: ${pg_pod_status:-NotFound})"
-        log_error "Please ensure PostgreSQL is running: kubectl get pods -n $INFRA_NAMESPACE"
-        exit 1
-    fi
-    
-    log_info "PostgreSQL is running"
-    
-    # Check if database secrets exist
-    for secret in kratos-db-credentials hydra-db-credentials; do
-        if ! kubectl get secret "$secret" -n "$ORY_NAMESPACE" &>/dev/null; then
-            log_error "Secret '$secret' not found in namespace '$ORY_NAMESPACE'"
-            log_error "Please run 'make setup-core' first to create database secrets"
-            exit 1
-        fi
-    done
-    
-    log_info "All database secrets found"
-    log_info "All prerequisites met"
+}
+
+deploy_postgres() {
+    log_step "Deploying PostgreSQL to $ORY_NAMESPACE"
+
+    # Generate random password for each DB user
+    local kratos_pwd=$(generate_secret)
+    local hydra_pwd=$(generate_secret)
+    local keto_pwd=$(generate_secret)
+
+    # Create init script
+    local init_sql=$(cat <<EOF
+CREATE USER kratos WITH PASSWORD '$kratos_pwd';
+CREATE DATABASE kratos OWNER kratos;
+CREATE USER hydra WITH PASSWORD '$hydra_pwd';
+CREATE DATABASE hydra OWNER hydra;
+CREATE USER keto WITH PASSWORD '$keto_pwd';
+CREATE DATABASE keto OWNER keto;
+EOF
+)
+
+    # Deploy PostgreSQL
+    helm upgrade --install geo-postgres bitnami/postgresql \
+        --namespace "$ORY_NAMESPACE" \
+        -f "$PROJECT_ROOT/helm/values/values-postgres.yaml" \
+        --set-string "primary.initdb.scripts.init\.sql=$init_sql" \
+        --wait --timeout=5m
+
+    # Get postgres password from Bitnami secret
+    local postgres_pwd=$(kubectl get secret --namespace "$ORY_NAMESPACE" geo-postgres-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+
+    # Build DSNs (correct host for Bitnami)
+    local host="geo-postgres-postgresql.$ORY_NAMESPACE.svc.cluster.local"
+    local kratos_dsn="postgres://kratos:$kratos_pwd@$host:5432/kratos?sslmode=disable"
+    local hydra_dsn="postgres://hydra:$hydra_pwd@$host:5432/hydra?sslmode=disable"
+    local keto_dsn="postgres://keto:$keto_pwd@$host:5432/keto?sslmode=disable"
+
+    # Create secrets
+    kubectl create secret generic kratos-db-credentials \
+        --namespace "$ORY_NAMESPACE" \
+        --from-literal=dsn="$kratos_dsn" --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create secret generic hydra-db-credentials \
+        --namespace "$ORY_NAMESPACE" \
+        --from-literal=dsn="$hydra_dsn" --dry-run=client -o yaml | kubectl apply -f -
+    kubectl create secret generic keto-db-credentials \
+        --namespace "$ORY_NAMESPACE" \
+        --from-literal=dsn="$keto_dsn" --dry-run=client -o yaml | kubectl apply -f -
+
+    log_info "PostgreSQL deployed and DSN secrets created"
+}
+
+# Generate secure random secrets
+generate_secret() {
+    openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
 }
 
 # Install Oathkeeper Maester CRDs
@@ -71,11 +99,6 @@ install_oathkeeper_crds() {
     kubectl apply -f https://raw.githubusercontent.com/ory/oathkeeper-maester/master/config/crd/bases/oathkeeper.ory.sh_rules.yaml
     
     log_info "Oathkeeper CRDs installed"
-}
-
-# Generate secure random secrets
-generate_secret() {
-    openssl rand -base64 32 | tr -d "=+/" | cut -c1-32
 }
 
 # Deploy Kratos (Identity Management)
@@ -193,66 +216,6 @@ apply_access_rules() {
     log_info "Access rules applied"
 }
 
-# Display connection info
-show_connection_info() {
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    log_info "Ory Services Information"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo ""
-    
-    echo "🔐 Deployed Services:"
-    echo "  • Kratos (Identity Management)"
-    echo "  • Hydra (OAuth2/OIDC)"
-    echo "  • Oathkeeper (API Gateway)"
-    
-    if kubectl get deployment keto -n "$ORY_NAMESPACE" &>/dev/null; then
-        echo "  • Keto (Permissions)"
-    fi
-    echo ""
-    
-    echo "🌐 Service URLs:"
-    echo "  • Kratos:     https://auth.combaldieu.fr"
-    echo "  • Hydra:      https://oauth.combaldieu.fr"
-    echo "  • Oathkeeper: https://gateway.combaldieu.fr"
-    echo ""
-    
-    echo "🔍 Check deployment status:"
-    echo "  kubectl get pods -n $ORY_NAMESPACE"
-    echo "  kubectl get ingress -n $ORY_NAMESPACE"
-    echo ""
-    
-    echo "📝 Get database connection strings:"
-    echo "  kubectl get secret kratos-db-credentials -n $ORY_NAMESPACE -o jsonpath='{.data.dsn}' | base64 -d"
-    echo "  kubectl get secret hydra-db-credentials -n $ORY_NAMESPACE -o jsonpath='{.data.dsn}' | base64 -d"
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-}
-
-main() {
-    log_step "Setting up Ory authentication stack"
-    echo ""
-    
-    check_prerequisites
-    echo ""
-    
-    deploy_kratos
-    echo ""
-    
-    deploy_hydra
-    echo ""
-    
-    deploy_keto
-    echo ""
-    
-    deploy_oathkeeper
-    echo ""
-    
-    log_info "Ory stack setup complete! 🎉"
-    
-    show_connection_info
-}
-
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    main "$@"
+if [[ $# -gt 0 ]]; then 
+    "$@"
 fi
