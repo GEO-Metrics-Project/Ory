@@ -52,17 +52,17 @@ EOF
 )
 
     # Deploy PostgreSQL
-    helm upgrade --install geo-postgres bitnami/postgresql \
+    helm upgrade --install ory-postgres bitnami/postgresql \
         --namespace "$ORY_NAMESPACE" \
         -f "$PROJECT_ROOT/helm/values/values-postgres.yaml" \
         --set-string "primary.initdb.scripts.init\.sql=$init_sql" \
         --wait --timeout=5m
 
     # Get postgres password from Bitnami secret
-    local postgres_pwd=$(kubectl get secret --namespace "$ORY_NAMESPACE" geo-postgres-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
+    local postgres_pwd=$(kubectl get secret --namespace "$ORY_NAMESPACE" ory-postgres-postgresql -o jsonpath="{.data.postgres-password}" | base64 -d)
 
     # Build DSNs (correct host for Bitnami)
-    local host="geo-postgres-postgresql.$ORY_NAMESPACE.svc.cluster.local"
+    local host="ory-postgres-postgresql.$ORY_NAMESPACE.svc.cluster.local"
     local kratos_dsn="postgres://kratos:$kratos_pwd@$host:5432/kratos?sslmode=disable"
     local hydra_dsn="postgres://hydra:$hydra_pwd@$host:5432/hydra?sslmode=disable"
     local keto_dsn="postgres://keto:$keto_pwd@$host:5432/keto?sslmode=disable"
