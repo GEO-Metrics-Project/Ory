@@ -37,15 +37,12 @@ deploy_postgres() {
 
     # Generate random password for each DB user
     local kratos_pwd=$(generate_secret)
-    local hydra_pwd=$(generate_secret)
     local keto_pwd=$(generate_secret)
 
     # Create init script
     local init_sql=$(cat <<EOF
 CREATE USER kratos WITH PASSWORD '$kratos_pwd';
 CREATE DATABASE kratos OWNER kratos;
-CREATE USER hydra WITH PASSWORD '$hydra_pwd';
-CREATE DATABASE hydra OWNER hydra;
 CREATE USER keto WITH PASSWORD '$keto_pwd';
 CREATE DATABASE keto OWNER keto;
 EOF
@@ -64,16 +61,12 @@ EOF
     # Build DSNs (correct host for Bitnami)
     local host="ory-postgres-postgresql.$ORY_NAMESPACE.svc.cluster.local"
     local kratos_dsn="postgres://kratos:$kratos_pwd@$host:5432/kratos?sslmode=disable"
-    local hydra_dsn="postgres://hydra:$hydra_pwd@$host:5432/hydra?sslmode=disable"
     local keto_dsn="postgres://keto:$keto_pwd@$host:5432/keto?sslmode=disable"
 
     # Create secrets
     kubectl create secret generic kratos-db-credentials \
         --namespace "$ORY_NAMESPACE" \
         --from-literal=dsn="$kratos_dsn" --dry-run=client -o yaml | kubectl apply -f -
-    kubectl create secret generic hydra-db-credentials \
-        --namespace "$ORY_NAMESPACE" \
-        --from-literal=dsn="$hydra_dsn" --dry-run=client -o yaml | kubectl apply -f -
     kubectl create secret generic keto-db-credentials \
         --namespace "$ORY_NAMESPACE" \
         --from-literal=dsn="$keto_dsn" --dry-run=client -o yaml | kubectl apply -f -
@@ -126,33 +119,6 @@ deploy_kratos() {
         --wait --timeout=5m
     
     log_info "Kratos deployed"
-}
-
-# Deploy Hydra (OAuth2/OIDC)
-deploy_hydra() {
-    log_step "Deploying Ory Hydra to $ORY_NAMESPACE"
-    
-    # Get DSN from secret created by setup-core.sh
-    local dsn=$(kubectl get secret hydra-db-credentials -n "$ORY_NAMESPACE" -o jsonpath='{.data.dsn}' | base64 -d)
-    
-    # Generate secrets
-    local system_secret=$(generate_secret)
-    local cookie_secret=$(generate_secret)
-    
-    if [[ ! -f "$PROJECT_ROOT/helm/values/values-hydra.yaml" ]]; then
-        log_error "Hydra values file not found: helm/values/values-hydra.yaml"
-        exit 1
-    fi
-    
-    helm upgrade --install hydra ory/hydra \
-        --namespace "$ORY_NAMESPACE" \
-        -f "$PROJECT_ROOT/helm/values/values-hydra.yaml" \
-        --set hydra.config.dsn="$dsn" \
-        --set hydra.config.secrets.system[0]="$system_secret" \
-        --set hydra.config.secrets.cookie[0]="$cookie_secret" \
-        --wait --timeout=5m
-    
-    log_info "Hydra deployed"
 }
 
 # Deploy Keto (Permissions)

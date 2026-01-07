@@ -58,13 +58,6 @@ oathkeeper:
       noop:
         enabled: true
 
-      id_token:
-        enabled: true
-        config:
-          issuer_url: http://hydra-public.geo-ory.svc.cluster.local:4444/
-          jwks_url: http://hydra-public.geo-ory.svc.cluster.local:4444/.well-known/jwks.json
-          ttl: 60s
-
       header:
         enabled: true
         config:
