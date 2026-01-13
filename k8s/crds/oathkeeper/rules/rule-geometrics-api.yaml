@@ -23,11 +23,6 @@ spec:
       config:
         headers:
           X-User-Id: "{{ print .Subject }}"
-  errors:
-    - handler: json
-      config:
-        code: 401
-        message: "Unauthorized"
 ---
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
@@ -52,11 +47,6 @@ spec:
       config:
         headers:
           X-User-Id: "{{ print .Subject }}"
-  errors:
-    - handler: json
-      config:
-        code: 401
-        message: "Unauthorized"
 ---
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
@@ -100,8 +90,3 @@ spec:
       config:
         headers:
           X-User-Id: "{{ print .Subject }}"
-  errors:
-    - handler: json
-      config:
-        code: 401
-        message: "Unauthorized"

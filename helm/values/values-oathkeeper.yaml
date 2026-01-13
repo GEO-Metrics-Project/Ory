@@ -78,7 +78,7 @@ oathkeeper:
         redirect:
           enabled: true
           config:
-            to: https://kratos.combaldieu.fr/self-service/login/browser?return_to={{ .MatchContext.URL.String }}
+            to: https://auth.combaldieu.fr/login?return_to={{.MatchContext.URL.String}}
 
     log:
       level: debug

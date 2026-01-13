@@ -20,7 +20,3 @@ spec:
     handler: allow
   mutators:
     - handler: noop
-  errors:
-    - handler: redirect
-      config:
-        to: https://kratos.combaldieu.fr/self-service/login/browser?return_to=https://geometrics.combaldieu.fr
