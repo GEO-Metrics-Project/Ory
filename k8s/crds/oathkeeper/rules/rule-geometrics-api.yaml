@@ -1,23 +1,101 @@
 apiVersion: oathkeeper.ory.sh/v1alpha1
 kind: Rule
 metadata:
-  name: geometrics-api-reports
+  name: geometrics-api-reports-list
   namespace: geo-ory
 spec:
   upstream:
     url: "http://report-service.geo-metrics.svc.cluster.local:8080"
   match:
-    url: <https:\/\/geometrics\.combaldieu\.fr\/api\/reports.*>
+    url: <https:\/\/geometrics\.combaldieu\.fr\/api\/reports$>
     methods:
       - GET
-      - POST
-      - PUT
-      - DELETE
-      - OPTIONS
   authenticators:
     - handler: cookie_session
   authorizer:
     handler: allow
+  mutators:
+    - handler: header
+      config:
+        headers:
+          X-User-Id: "{{ print .Subject }}"
+---
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: geometrics-api-reports-view
+  namespace: geo-ory
+spec:
+  upstream:
+    url: "http://report-service.geo-metrics.svc.cluster.local:8080"
+  match:
+    url: <https:\/\/geometrics\.combaldieu\.fr\/api\/reports\/([0-9]+)(?:\/llm-responses)?$>
+    methods:
+      - GET
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: keto_engine_acp_ory
+    config:
+      base_url: http://keto-read.geo-ory.svc.cluster.local:4466
+      required_action: view
+      required_resource: "report:{{.MatchContext.RegexpCaptureGroups.1}}"
+      subject: "{{print .Subject}}"
+  mutators:
+    - handler: header
+      config:
+        headers:
+          X-User-Id: "{{ print .Subject }}"
+---
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: geometrics-api-reports-delete
+  namespace: geo-ory
+spec:
+  upstream:
+    url: "http://report-service.geo-metrics.svc.cluster.local:8080"
+  match:
+    url: <https:\/\/geometrics\.combaldieu\.fr\/api\/reports\/([0-9]+)$>
+    methods:
+      - DELETE
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: keto_engine_acp_ory
+    config:
+      base_url: http://keto-read.geo-ory.svc.cluster.local:4466
+      required_action: owner
+      required_resource: "report:{{.MatchContext.RegexpCaptureGroups.1}}"
+      subject: "{{print .Subject}}"
+  mutators:
+    - handler: header
+      config:
+        headers:
+          X-User-Id: "{{ print .Subject }}"
+---
+apiVersion: oathkeeper.ory.sh/v1alpha1
+kind: Rule
+metadata:
+  name: geometrics-api-reports-share
+  namespace: geo-ory
+spec:
+  upstream:
+    url: "http://report-service.geo-metrics.svc.cluster.local:8080"
+  match:
+    url: <https:\/\/geometrics\.combaldieu\.fr\/api\/reports\/([0-9]+)\/share.*>
+    methods:
+      - POST
+      - DELETE
+  authenticators:
+    - handler: cookie_session
+  authorizer:
+    handler: keto_engine_acp_ory
+    config:
+      base_url: http://keto-read.geo-ory.svc.cluster.local:4466
+      required_action: owner
+      required_resource: "report:{{.MatchContext.RegexpCaptureGroups.1}}"
+      subject: "{{print .Subject}}"
   mutators:
     - handler: header
       config:

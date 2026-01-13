@@ -10,9 +10,10 @@ keto:
     namespaces:
       - id: 0
         name: reports
+        # Define relation types for reports namespace
+        # owner: full access (view, delete, share)
+        # viewer: read-only access (view)
       - id: 1
-        name: llm
-      - id: 2
         name: admin
     
     serve:
