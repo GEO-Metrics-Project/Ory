@@ -6,15 +6,10 @@ keto:
 
   config:
     #DSN will be set via --set during deployment
-
+    
     namespaces:
-      - id: 0
-        name: reports
-        # Define relation types for reports namespace
-        # owner: full access (view, delete, share)
-        # viewer: read-only access (view)
-      - id: 1
-        name: admin
+      - name: Report
+        id: 1
     
     serve:
       read:

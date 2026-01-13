@@ -50,13 +50,6 @@ oathkeeper:
       deny:
         enabled: true
 
-      keto_engine_acp_ory:
-        enabled: true
-        config:
-          base_url: http://keto-read.geo-ory.svc.cluster.local:4466
-          required_action: "access"
-          required_resource: "resources:{{.MatchContext.URL.Path}}"
-
     mutators:
       noop:
         enabled: true
@@ -78,7 +71,7 @@ oathkeeper:
         redirect:
           enabled: true
           config:
-            to: https://auth.combaldieu.fr/login?return_to={{.MatchContext.URL.String}}
+            to: https://auth.combaldieu.fr/login
 
     log:
       level: debug
