@@ -79,9 +79,10 @@ spec:
   upstream:
     url: "http://report-service.geo-metrics.svc.cluster.local:8080"
   match:
-    url: <https:\/\/geometrics\.combaldieu\.fr\/api\/reports\/([0-9]+)\/share.*>
+    url: <https:\/\/geometrics\.combaldieu\.fr\/api\/reports\/([0-9]+)\/(share|shared-with).*>
     methods:
       - OPTIONS
+      - GET
       - POST
       - DELETE
   authenticators:
