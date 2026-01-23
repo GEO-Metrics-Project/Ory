@@ -71,7 +71,7 @@ oathkeeper:
         redirect:
           enabled: true
           config:
-            to: https://auth.combaldieu.fr/login
+            to: https://auth.combaldieu.fr/auth/login
 
     log:
       level: debug

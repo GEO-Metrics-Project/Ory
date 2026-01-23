@@ -21,8 +21,6 @@ kratos:
           allowed_origins:
             - "https://auth.combaldieu.fr"
             - "https://geometrics.combaldieu.fr"
-      admin:
-        base_url: http://kratos-admin.geo-ory.svc.cluster.local:4434/
 
     selfservice:
       default_browser_return_url: https://geometrics.combaldieu.fr
@@ -37,6 +35,8 @@ kratos:
         oidc:
           enabled: false
         link:
+          enabled: false
+        code:
           enabled: true
       
       flows:
@@ -46,24 +46,29 @@ kratos:
           ui_url: https://auth.combaldieu.fr/settings
         logout:
           after:
-            default_browser_return_url: https://auth.combaldieu.fr/login
+            default_browser_return_url: https://auth.combaldieu.fr/auth/login
         login:
-          ui_url: https://auth.combaldieu.fr/login
+          ui_url: https://auth.combaldieu.fr/auth/login
+          after:
+            hooks:
+              - hook: require_verified_address
         registration:
           enabled: true
-          ui_url: https://auth.combaldieu.fr/registration
+          ui_url: https://auth.combaldieu.fr/auth/registration
           after:
             password:
               hooks:
-                - hook: session
+                - hook: show_verification_ui
         recovery:
           enabled: true
-          ui_url: https://auth.combaldieu.fr/recovery
-          use: link
+          ui_url: https://auth.combaldieu.fr/auth/recovery
+          use: code
         verification:
           enabled: true
-          ui_url: https://auth.combaldieu.fr/verification
-          use: link
+          ui_url: https://auth.combaldieu.fr/auth/verification
+          use: code
+          after:
+            default_browser_return_url: https://auth.combaldieu.fr/auth/login  # After verification, go to login
 
     log:
       level: debug
@@ -133,5 +138,5 @@ service:
     enabled: true
     type: ClusterIP
   admin:
-    enabled: true
+    enabled: false
     type: ClusterIP
